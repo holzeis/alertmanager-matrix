@@ -116,7 +116,7 @@ func sendToMatrix(message string) error {
 // ---- Main ----
 
 func main() {
-	http.HandleFunc("/alert", alertHandler)
+	http.HandleFunc("/alerts", alertHandler)
 
 	log.Println("Listening on", listenAddr)
 	log.Fatal(http.ListenAndServe(listenAddr, nil))
