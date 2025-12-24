@@ -53,7 +53,7 @@ func alertHandler(w http.ResponseWriter, r *http.Request) {
     }
 
     for _, alert := range webhook.Alerts {
-       message := formatAlert(alert)
+       message := formatAlertBySeverity(alert)
        if err := sendToMatrix(message); err != nil {
           log.Println("Matrix send failed:", err)
        }
@@ -62,20 +62,51 @@ func alertHandler(w http.ResponseWriter, r *http.Request) {
     w.WriteHeader(http.StatusOK)
 }
 
-func formatAlert(alert Alert) string {
+func watchdogHandler(w http.ResponseWriter, r *http.Request) {
+    message := "✅ Daily Watchdog: All systems operational!"
+    if err := sendToMatrix(message); err != nil {
+        log.Println("Matrix send failed:", err)
+        http.Error(w, "Failed to send watchdog message", http.StatusInternalServerError)
+        return
+    }
+    w.WriteHeader(http.StatusOK)
+}
+
+// ---- Alert Formatting ----
+
+func formatAlertBySeverity(alert Alert) string {
     name := alert.Labels["alertname"]
     severity := alert.Labels["severity"]
     summary := alert.Annotations["summary"]
     description := alert.Annotations["description"]
 
-    return fmt.Sprintf(
-       "🚨 **Alert:** %s\n**Severity:** %s\n**Status:** %s\n\n%s\n%s",
-       name,
-       severity,
-       alert.Status,
-       summary,
-       description,
-    )
+    if alert.Status == "resolved" {
+        return fmt.Sprintf("✅ Resolved Alert: %s", name)
+    }
+
+    switch severity {
+    case "critical":
+        return fmt.Sprintf(
+            "🚨 %s\n%s\n\n%s",
+            name,
+            summary,
+            description,
+        )
+    case "warning":
+        return fmt.Sprintf(
+            "⚠️ %s\n%s\n\n%s",
+            name,
+            summary,
+            description,
+        )
+    default:
+        return fmt.Sprintf(
+            "ℹ️ %s\n%s\n\n%s",
+            name,
+            summary,
+            description,
+        )
+    }
 }
 
 // ---- Matrix sender ----
@@ -139,6 +170,7 @@ func main() {
     }
 
     http.HandleFunc("/alerts", alertHandler)
+    http.HandleFunc("/watchdog", watchdogHandler)
 
     log.Println("Listening on", listenAddr)
     log.Fatal(http.ListenAndServe(listenAddr, nil))
